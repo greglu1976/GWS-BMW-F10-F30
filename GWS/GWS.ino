@@ -626,12 +626,12 @@ void loop()
     InhibTimer = millis();
 
   if(digitalRead(inP)==HIGH) {
-    timerP = timerR+1;
+    timerP = timerP+1;
     timerR = 0;
     timerN = 0;
     timerD = 0;
     if (timerP>3) {
-      inhibitorP = 1; // через 150 мс выставляем P
+      inhibitorP = 1; // через 150 мс выставляем P, время по месту регулируется
       inhibitorR = 0; // остальные сбрасываем
       inhibitorN = 0;
       inhibitorD = 0;
