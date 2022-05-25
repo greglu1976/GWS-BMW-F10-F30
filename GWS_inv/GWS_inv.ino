@@ -157,18 +157,18 @@ byte pressedP = 0;
 byte turnMinus = 0;
 byte turnPlus = 0;
 
-byte moving =0 ; 
+byte moving = 0 ;
 byte moving2R = 0;
 byte moving2N = 0;
 byte moving2D = 0;
 byte moving2P = 0;
 byte error = 0;
-byte operTime = 0; 
+byte operTime = 0;
 byte dsTimer = 0;
 
 uint32_t Timer = 0;
 uint32_t tmr = 0;
-uint32_t InhibTimer=0;
+uint32_t InhibTimer = 0;
 int timeDS = 0;
 
 byte timerD = 0;
@@ -208,36 +208,38 @@ static const uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL ; // 16 MHz
 
 
 
-void setup() 
+void setup()
 {
-  pinMode(mot1,OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
-  pinMode(mot2,OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
+  error = 0; // при сбросе выставляем состояние без ошибок
+  
+  pinMode(mot1, OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
+  pinMode(mot2, OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
 
-  pinMode(inP,INPUT_PULLUP); // инициализируем вход
-  pinMode(inR,INPUT_PULLUP); // инициализируем вход
-  pinMode(inN,INPUT_PULLUP); // инициализируем вход
-  pinMode(inD,INPUT_PULLUP); // инициализируем вход
+  pinMode(inP, INPUT_PULLUP); // инициализируем вход
+  pinMode(inR, INPUT_PULLUP); // инициализируем вход
+  pinMode(inN, INPUT_PULLUP); // инициализируем вход
+  pinMode(inD, INPUT_PULLUP); // инициализируем вход
 
-  pinMode(DS_minus,OUTPUT); // инициализируем выход на ЭБУ
-  pinMode(DS_plus,OUTPUT); // инициализируем выход на ЭБУ
-  pinMode(DS_out,OUTPUT); // инициализируем выход на ЭБУ
+  pinMode(DS_minus, OUTPUT); // инициализируем выход на ЭБУ
+  pinMode(DS_plus, OUTPUT); // инициализируем выход на ЭБУ
+  pinMode(DS_out, OUTPUT); // инициализируем выход на ЭБУ
 
   Serial.begin(9600); // для тестирования
 
-// считываем текущее положение ингибитора
-  if(digitalRead(inP)==LOW) {
-    inhibitorP = 1;  
+  // считываем текущее положение ингибитора
+  if (digitalRead(inP) == LOW) {
+    inhibitorP = 1;
   }
-  if(digitalRead(inR)==LOW) {
-    inhibitorR = 1;  
+  if (digitalRead(inR) == LOW) {
+    inhibitorR = 1;
   }
-  if(digitalRead(inN)==LOW) {
-    inhibitorN = 1;  
+  if (digitalRead(inN) == LOW) {
+    inhibitorN = 1;
   }
-  if(digitalRead(inD)==LOW) {
-    inhibitorD = 1;  
+  if (digitalRead(inD) == LOW) {
+    inhibitorD = 1;
   }
-//-----------------------------------------
+  //-----------------------------------------
 
   Serial.println("INIT");
   Serial.println(inhibitorP);
@@ -248,9 +250,9 @@ void setup()
 
 
 
-  
 
-// от борохова инициализация
+
+  // от борохова инициализация
   SPI.begin () ;
   //--- Configure ACAN2515
   ACAN2515Settings settings (QUARTZ_FREQUENCY, 500UL * 1000UL) ; // CAN bit rate 125 kb/s
@@ -274,42 +276,43 @@ void setup()
       }
     }
   }
-// конец инициализации от борохова
+  // конец инициализации от борохова
 
 }
 
-void loop() 
+void loop()
 {
-
-    if (inhibitorP) {
-     Serial.println("Parking");
-    }
-    if(digitalRead(inP)==LOW) {
-     Serial.println("READ Parking"); 
-    }
-    if (inhibitorR) {
-     Serial.println("Reverse");
-    }
-    if(digitalRead(inR)==LOW) {
-     Serial.println("READ Reverse"); 
-    }
-    if (inhibitorN) {
-     Serial.println("Neutral");
-    }
-    if(digitalRead(inN)==LOW) {
-     Serial.println("READ Neutral");
-    }
-    if (inhibitorD) {
-     Serial.println("Drive");
-    }
-    if(digitalRead(inD)==LOW) {
-    Serial.println("READ Drive");  
+  // БЛОК КОДА ДЛЯ ТЕСТА
+  if (inhibitorP) {
+    Serial.println("Parking");
   }
+  if (digitalRead(inP) == LOW) {
+    Serial.println("READ Parking");
+  }
+  if (inhibitorR) {
+    Serial.println("Reverse");
+  }
+  if (digitalRead(inR) == LOW) {
+    Serial.println("READ Reverse");
+  }
+  if (inhibitorN) {
+    Serial.println("Neutral");
+  }
+  if (digitalRead(inN) == LOW) {
+    Serial.println("READ Neutral");
+  }
+  if (inhibitorD) {
+    Serial.println("Drive");
+  }
+  if (digitalRead(inD) == LOW) {
+    Serial.println("READ Drive");
+  }
+  // КОНЕЦ БЛОКА КОДА ДЛЯ ТЕСТА
 
   //
   //БЛОК ПРИЕМА СООБЩЕНИЙ ОТ ДЖОЙСТИКА
   // взято у борохова
-  
+
   CANMessage frame ;
   //unsigned long currentMillis = millis();
 
@@ -323,124 +326,138 @@ void loop()
       Serial.print (frame.data[i], HEX) ;
     }
     Serial.println();
-      if (frame.data[2] == 0x4E) //Длинное на себя
+    if (frame.data[2] == 0x4E) //Длинное на себя
+    {
+      LongDown++;
+      if (LongDown > 8)
       {
-        LongDown++;
-        if (LongDown > 8)
-        {
-          long2self = 1;
-          short2self = 0;
-          longFromSelf = 0;
-          shortFromSelf = 0;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
-          DS_trans = 0;
-          LongDown = 0;
-        }
-      } else if (frame.data[2] == 0x3E) //Короткое на себя
-      {
-        ShortDown++;
-        if (ShortDown > 8)
-        {
-          long2self = 0;
-          short2self = 1;
-          longFromSelf = 0;
-          shortFromSelf = 0;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
-          DS_trans = 0;
-          ShortDown = 0;
-          }
-        }
-        else if (frame.data[3] == 0xD5)  { // нажата кнопка паркинг
-        long2self = 0;
+        long2self = 1;
         short2self = 0;
         longFromSelf = 0;
         shortFromSelf = 0;
-        pressedP = 1;
+        pressedP = 0;
         turnMinus = 0;
         turnPlus = 0;
         DS_trans = 0;
-      } else if (frame.data[2] == 0x2E) //Длинное от себя
-      {
-        LongUp++;
-        if (LongUp > 8) {
-          long2self = 0;
-          short2self = 0;
-          longFromSelf = 1;
-          shortFromSelf = 0;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
-          DS_trans = 0;
-          LongUp = 0;
-        }
-      } else if (frame.data[2] == 0x1E) //Короткое от себя
-      {
-        ShortUp++;
-        if (ShortUp > 8) {
-          long2self = 0;
-          short2self = 0;
-          longFromSelf = 0;
-          shortFromSelf = 1;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
-          DS_trans = 0;
-          ShortUp = 0;
-        }
-          
+        LongDown = 0;
       }
-        else if (frame.data[2] == 0x7E) //D/S
+    } else if (frame.data[2] == 0x3E) //Короткое на себя
+    {
+      ShortDown++;
+      if (ShortDown > 8)
       {
-        //надо включить реле на D/S
-          long2self = 0;
-          short2self = 0;
-          longFromSelf = 0;
-          shortFromSelf = 0;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
-          DS_trans = 1;
-      } else if (frame.data[2] == 0x5E) //D/S-
-      {
-        turnMinus = 1;
-        turnPlus = 0;
-
-      } else if (frame.data[2] == 0x6E) //D/S+
-      {
-        //надо включить реле +
+        long2self = 0;
+        short2self = 1;
+        longFromSelf = 0;
+        shortFromSelf = 0;
+        pressedP = 0;
         turnMinus = 0;
-        turnPlus = 1;
+        turnPlus = 0;
+        DS_trans = 0;
+        ShortDown = 0;
       }
-       else { // если нет сообщений, то обнуляем все переменные, кроме DS_trans
-          long2self = 0;
-          short2self = 0;
-          longFromSelf = 0;
-          shortFromSelf = 0;
-          pressedP = 0;
-          turnMinus = 0;
-          turnPlus = 0;
+    }
+    else if (frame.data[3] == 0xD5)  { // нажата кнопка паркинг
+      long2self = 0;
+      short2self = 0;
+      longFromSelf = 0;
+      shortFromSelf = 0;
+      pressedP = 1;
+      turnMinus = 0;
+      turnPlus = 0;
+      DS_trans = 0;
+    } else if (frame.data[2] == 0x2E) //Длинное от себя
+    {
+      LongUp++;
+      if (LongUp > 8) {
+        long2self = 0;
+        short2self = 0;
+        longFromSelf = 1;
+        shortFromSelf = 0;
+        pressedP = 0;
+        turnMinus = 0;
+        turnPlus = 0;
+        DS_trans = 0;
+        LongUp = 0;
       }
-   }   
+    } else if (frame.data[2] == 0x1E) //Короткое от себя
+    {
+      ShortUp++;
+      if (ShortUp > 8) {
+        long2self = 0;
+        short2self = 0;
+        longFromSelf = 0;
+        shortFromSelf = 1;
+        pressedP = 0;
+        turnMinus = 0;
+        turnPlus = 0;
+        DS_trans = 0;
+        ShortUp = 0;
+      }
+
+    }
+    else if (frame.data[2] == 0x7E) //D/S
+    {
+      //надо включить реле на D/S
+      long2self = 0;
+      short2self = 0;
+      longFromSelf = 0;
+      shortFromSelf = 0;
+      pressedP = 0;
+      turnMinus = 0;
+      turnPlus = 0;
+      DS_trans = 1;
+    } else if (frame.data[2] == 0x5E) //D/S-
+    {
+      turnMinus = 1;
+      turnPlus = 0;
+
+    } else if (frame.data[2] == 0x6E) //D/S+
+    {
+      //надо включить реле +
+      turnMinus = 0;
+      turnPlus = 1;
+    }
+    
+    else { // если нет сообщений, то обнуляем все переменные, кроме DS_trans
+      long2self = 0;
+      short2self = 0;
+      longFromSelf = 0;
+      shortFromSelf = 0;
+      pressedP = 0;
+      turnMinus = 0;
+      turnPlus = 0;
+    }
+  }
+
+  // если моторчик в движении, то игнорируем все сообщения от джойстика
+  // здесь можно добавить проверку на ошибки или 
+  if (moving) {
+    long2self = 0;
+    short2self = 0;
+    longFromSelf = 0;
+    shortFromSelf = 0;
+    pressedP = 0;
+    turnMinus = 0;
+    turnPlus = 0;
+  }
+
   //
   //КОНЕЦ БЛОКА ПРИЕМА СООБЩЕНИЙ ОТ ДЖОЙСТИКА
   // на выходе имеем переменную с выбранным нажатием джойстика, всего 8 режимов
   //
-  
+
 
   //
   // БЛОК РЕАЛИЗАЦИИ ВЫБРАННЫХ РЕЖИМОВ
   //
 
-  if (long2self){
+  if (long2self) {
     analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
     moving = 1; // выставляем флаг работы моторчика
     moving2D = 1; // выставляем флаг работы моторчика до положения D
   }
-   if (short2self){
+  if (short2self) {
     if (inhibitorP) {
       analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
       moving = 1; // выставляем флаг работы моторчика
@@ -458,12 +475,12 @@ void loop()
     }
   }
 
-  if (longFromSelf){
+  if (longFromSelf) {
     analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2R = 1; // выставляем флаг работы моторчика до положения R
   }
-  if (shortFromSelf){
+  if (shortFromSelf) {
     if (inhibitorD) {
       analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
       moving = 1; // выставляем флаг работы моторчика
@@ -480,13 +497,13 @@ void loop()
     analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2P = 1; // выставляем флаг работы моторчика до положения P
- 
+
   }
-  
-  if (DS_trans && inhibitorD){ // выбран режим DS и коробка в D
+
+  if (DS_trans && inhibitorD) { // выбран режим DS и коробка в D
     digitalWrite(DS_out, HIGH);
   }
-  if (!DS_trans){ // возврат DS
+  if (!DS_trans) { // возврат DS
     digitalWrite(DS_out, LOW);
   }
 
@@ -496,15 +513,15 @@ void loop()
   }
 
   if (DS_trans && turnPlus) {
-    dsTimer = 1; // запускаем таймер 
+    dsTimer = 1; // запускаем таймер
     digitalWrite(DS_plus, HIGH);
   }
-  
+
   if (dsTimer) {
-    if (millis()-Timer>=50) {
+    if (millis() - Timer >= 50) {
       Timer = millis();
-      timeDS = timeDS+50;
-      if (timeDS>=300) { // длительность импульса в ЭБУ на М+ М- здесь 300 мс, выставляется по месту
+      timeDS = timeDS + 50;
+      if (timeDS >= 300) { // длительность импульса в ЭБУ на М+ М- здесь 300 мс, выставляется по месту
         digitalWrite(DS_minus, LOW); // снимаем сигнал M-
         digitalWrite(DS_plus, LOW); // снимаем сигнал M+
         timeDS = 0; // обнуляем выдержку
@@ -513,7 +530,7 @@ void loop()
     }
   }
 
-//
+  //
   // КОНЕЦ БЛОКА РЕАЛИЗАЦИИ ВЫБРАННЫХ РЕЖИМОВ
   //
 
@@ -522,46 +539,46 @@ void loop()
   //
   // БЛОК КОНТРОЛЯ РАБОТЫ МОТОРЧИКА
   // Контролируем движение моторчика и время его работы (если больше 5 секунд то останавливаем, время настраивается по месту)
-  if (millis()-tmr>=50) {
+  if (millis() - tmr >= 50) {
     tmr = millis();
-    if (moving == 1){
-      operTime = operTime+1;
-      if (operTime>=100) {
+    if (moving == 1) {
+      operTime = operTime + 1;
+      if (operTime >= 100) {
         analogWrite(mot1, 0); // обнуляем выхода ардуино
         analogWrite(mot2, 0); // для останова моторчика
-        moving =0 ; // снимаем флаги движения
+        moving = 0 ; // снимаем флаги движения
         moving2R = 0;
         moving2N = 0;
         moving2D = 0;
         moving2P = 0;
         error = 1; // выставляем ошибку превышение времени работы моторчика
-        operTime = 0; 
+        operTime = 0;
       }
     }
     else {
-        operTime = 0;
-      }
+      operTime = 0;
+    }
   }
-  
-  if (moving2R==1 && inhibitorR==1 ) { // если достигли R то останавливаем моторчик
+
+  if (moving2R == 1 && inhibitorR == 1 ) { // если достигли R то останавливаем моторчик
     analogWrite(mot1, 0); // обнуляем выхода ардуино
     analogWrite(mot2, 0); // обнуляем выхода ардуино
     moving2R = 0; // сбрасываем флаг движения к R
     moving = 0; // сбрасываем общий флаг движения
   }
-  if (moving2P==1 && inhibitorP==1 ) { // если достигли P то останавливаем моторчик
+  if (moving2P == 1 && inhibitorP == 1 ) { // если достигли P то останавливаем моторчик
     analogWrite(mot1, 0);
     analogWrite(mot2, 0);
     moving2P = 0;
     moving = 0;
   }
-  if (moving2N==1 && inhibitorN==1 ) { // если достигли N то останавливаем моторчик
+  if (moving2N == 1 && inhibitorN == 1 ) { // если достигли N то останавливаем моторчик
     analogWrite(mot1, 0);
     analogWrite(mot2, 0);
     moving2N = 0;
     moving = 0;
   }
-  if (moving2D==1 && inhibitorD==1 ) { // если достигли D то останавливаем моторчик
+  if (moving2D == 1 && inhibitorD == 1 ) { // если достигли D то останавливаем моторчик
     analogWrite(mot1, 0);
     analogWrite(mot2, 0);
     moving2D = 0;
@@ -575,48 +592,48 @@ void loop()
   /// взято у борохова с доработками
 
   if (gSendDate < millis ()) {
-      CANMessage message, message1;
-      message.id = 0x3FD;
-      message.len = 5;
-      if (inhibitorD) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgD[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorP)
-      {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgP[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorR) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgR[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorN) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgN[SendMsgcount][i];
-          //message.data[0]+=SendMsgDcount*10;
-        }
-        ok = can.tryToSend (message) ;
-      } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgDS[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
+    CANMessage message, message1;
+    message.id = 0x3FD;
+    message.len = 5;
+    if (inhibitorD) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgD[SendMsgcount][i];
       }
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorP)
+    {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgP[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorR) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgR[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorN) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgN[SendMsgcount][i];
+        //message.data[0]+=SendMsgDcount*10;
+      }
+      ok = can.tryToSend (message) ;
+    } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgDS[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    }
 
-      if (ok) {
-        Serial.print (message.id, HEX) ;
-        for (int i = 0; i < 5; i++) {
-  /*        Serial.print ("  ") ;
-          Serial.print (message.data[i], HEX) ;
-        }
+    if (ok) {
+      Serial.print (message.id, HEX) ;
+      for (int i = 0; i < 5; i++) {
+        /*        Serial.print ("  ") ;
+                Serial.print (message.data[i], HEX) ;
+              }
 
-        Serial.println();
-        Serial.print("П=");
-        Serial.println(P_trans);
+              Serial.println();
+              Serial.print("П=");
+              Serial.println(P_trans);
         */
         gSendDate += 200 ;
 
@@ -648,50 +665,50 @@ void loop()
       SendMsgSPcount++;
       if (SendMsgSPcount > 14) SendMsgSPcount = 0;
     }
-  } 
+  }
 
   ///
   /// КОНЕЦ БЛОКА ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА
-  /// 
+  ///
 
   ///
   /// БЛОК СЧИТЫВАНИЯ ПОЛОЖЕНИЯ ИНГИБИТОРА
   ///
 
-  if (millis()-InhibTimer>=15) {
+  if (millis() - InhibTimer >= 15) {
     InhibTimer = millis();
 
-  if(digitalRead(inP)==LOW) {
-    timerP = timerP+1;
-    timerR = 0;
-    timerN = 0;
-    timerD = 0;
-    if (timerP>2) {
-      inhibitorP = 1; // через 30 мс выставляем P, время по месту регулируется
-      inhibitorR = 0; // остальные сбрасываем
-      inhibitorN = 0;
-      inhibitorD = 0;
+    if (digitalRead(inP) == LOW) {
+      timerP = timerP + 1;
+      timerR = 0;
+      timerN = 0;
+      timerD = 0;
+      if (timerP > 2) {
+        inhibitorP = 1; // через 30 мс выставляем P, время по месту регулируется
+        inhibitorR = 0; // остальные сбрасываем
+        inhibitorN = 0;
+        inhibitorD = 0;
+      }
     }
-  } 
-   if(digitalRead(inR)==LOW) {
-      timerR = timerR+1;
+    if (digitalRead(inR) == LOW) {
+      timerR = timerR + 1;
       timerP = 0;
       timerN = 0;
       timerD = 0;
-      if (timerR>2) {
+      if (timerR > 2) {
         inhibitorP = 0; // через 30 мс выставляем R
         inhibitorR = 1; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 0;
         timerR = 0;
       }
-   }
-    if(digitalRead(inN)==LOW) {
-      timerN = timerN+1;
+    }
+    if (digitalRead(inN) == LOW) {
+      timerN = timerN + 1;
       timerR = 0;
       timerP = 0;
       timerD = 0;
-      if (timerN>2) {
+      if (timerN > 2) {
         inhibitorP = 0; // через 30 мс выставляем N
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 1;
@@ -699,13 +716,13 @@ void loop()
         timerN = 0;
       }
     }
-      
-    if(digitalRead(inD)==LOW) {
-      timerD = timerD+1;
+
+    if (digitalRead(inD) == LOW) {
+      timerD = timerD + 1;
       timerR = 0;
       timerN = 0;
       timerP = 0;
-      if (timerD>2) {
+      if (timerD > 2) {
         inhibitorP = 0; // через 30 мс выставляем D
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
@@ -715,4 +732,3 @@ void loop()
     }
   }
 }
- 
