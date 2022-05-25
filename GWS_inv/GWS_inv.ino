@@ -213,10 +213,10 @@ void setup()
   pinMode(mot1,OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
   pinMode(mot2,OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
 
-  pinMode(inP,INPUT); // инициализируем вход
-  pinMode(inR,INPUT); // инициализируем вход
-  pinMode(inN,INPUT); // инициализируем вход
-  pinMode(inD,INPUT); // инициализируем вход
+  pinMode(inP,INPUT_PULLUP); // инициализируем вход
+  pinMode(inR,INPUT_PULLUP); // инициализируем вход
+  pinMode(inN,INPUT_PULLUP); // инициализируем вход
+  pinMode(inD,INPUT_PULLUP); // инициализируем вход
 
   pinMode(DS_minus,OUTPUT); // инициализируем выход на ЭБУ
   pinMode(DS_plus,OUTPUT); // инициализируем выход на ЭБУ
@@ -225,22 +225,25 @@ void setup()
   Serial.begin(9600); // для тестирования
 
 // считываем текущее положение ингибитора
-  if(digitalRead(inP)==HIGH) {
+  if(digitalRead(inP)==LOW) {
     inhibitorP = 1;  
   }
-  if(digitalRead(inR)==HIGH) {
+  if(digitalRead(inR)==LOW) {
     inhibitorR = 1;  
   }
-  if(digitalRead(inN)==HIGH) {
+  if(digitalRead(inN)==LOW) {
     inhibitorN = 1;  
   }
-  if(digitalRead(inD)==HIGH) {
+  if(digitalRead(inD)==LOW) {
     inhibitorD = 1;  
   }
 //-----------------------------------------
 
   Serial.println("INIT");
- 
+  Serial.println(inhibitorP);
+  Serial.println(inhibitorR);
+  Serial.println(inhibitorN);
+  Serial.println(inhibitorD);
 
 
 
@@ -281,25 +284,25 @@ void loop()
     if (inhibitorP) {
      Serial.println("Parking");
     }
-    if(digitalRead(inP)==HIGH) {
+    if(digitalRead(inP)==LOW) {
      Serial.println("READ Parking"); 
     }
     if (inhibitorR) {
      Serial.println("Reverse");
     }
-    if(digitalRead(inR)==HIGH) {
+    if(digitalRead(inR)==LOW) {
      Serial.println("READ Reverse"); 
     }
     if (inhibitorN) {
      Serial.println("Neutral");
     }
-    if(digitalRead(inN)==HIGH) {
+    if(digitalRead(inN)==LOW) {
      Serial.println("READ Neutral");
     }
     if (inhibitorD) {
      Serial.println("Drive");
     }
-    if(digitalRead(inD)==HIGH) {
+    if(digitalRead(inD)==LOW) {
     Serial.println("READ Drive");  
   }
 
@@ -629,7 +632,7 @@ void loop()
       }
       ok = can.tryToSend (message) ;
       if (ok) {
-        gSendDate1000 += 1000 ;
+        gSendDate1000 += 200 ;
       }
     } else if (gSendDate200 < millis()) {
       CANMessage message;
@@ -658,7 +661,7 @@ void loop()
   if (millis()-InhibTimer>=15) {
     InhibTimer = millis();
 
-  if(digitalRead(inP)==HIGH) {
+  if(digitalRead(inP)==LOW) {
     timerP = timerP+1;
     timerR = 0;
     timerN = 0;
@@ -670,7 +673,7 @@ void loop()
       inhibitorD = 0;
     }
   } 
-   if(digitalRead(inR)==HIGH) {
+   if(digitalRead(inR)==LOW) {
       timerR = timerR+1;
       timerP = 0;
       timerN = 0;
@@ -683,7 +686,7 @@ void loop()
         timerR = 0;
       }
    }
-    if(digitalRead(inN)==HIGH) {
+    if(digitalRead(inN)==LOW) {
       timerN = timerN+1;
       timerR = 0;
       timerP = 0;
@@ -697,7 +700,7 @@ void loop()
       }
     }
       
-    if(digitalRead(inD)==HIGH) {
+    if(digitalRead(inD)==LOW) {
       timerD = timerD+1;
       timerR = 0;
       timerN = 0;

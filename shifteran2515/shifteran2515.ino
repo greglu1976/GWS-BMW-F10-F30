@@ -431,6 +431,7 @@ void loop () {
           message.data[i] = canMsgN[SendMsgcount][i];
           //message.data[0]+=SendMsgDcount*10;
         }
+        ok = can.tryToSend (message) ;
       } else if (DS_trans) {
         for (int i = 0; i < 5; i++) {
           message.data[i] = canMsgDS[SendMsgcount][i];
