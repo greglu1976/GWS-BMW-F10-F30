@@ -23,7 +23,7 @@ const uint8_t canMsgP[15][5] = {
   {0xBC, 0x0D, 0x20, 0x0C, 0xFF},
   {0x06, 0x0E, 0x20, 0x0C, 0xFF},
 };
-const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};
+const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};  
 const uint8_t canMsgSP[15][7] = {
   {0x1A1, 5, 0xFC, 0xC6, 0x00, 0x00, 0x81},
   {0x1A1, 5, 0x61, 0xC7, 0x00, 0x00, 0x81},
@@ -246,9 +246,6 @@ void setup()
   Serial.println(inhibitorR);
   Serial.println(inhibitorN);
   Serial.println(inhibitorD);
-
-
-
 
 
 
@@ -502,19 +499,23 @@ void loop()
 
   if (DS_trans && inhibitorD) { // выбран режим DS и коробка в D
     digitalWrite(DS_out, HIGH);
+    Serial.print ("DS activated") ;
   }
   if (!DS_trans) { // возврат DS
     digitalWrite(DS_out, LOW);
+    Serial.print ("DS DEactivated") ;
   }
 
   if (DS_trans && turnMinus) {
     dsTimer = 1; // запускаем таймер
     digitalWrite(DS_minus, HIGH);
+    Serial.print ("DS MINUS activated") ;
   }
 
   if (DS_trans && turnPlus) {
     dsTimer = 1; // запускаем таймер
     digitalWrite(DS_plus, HIGH);
+    Serial.print ("DS PLUS activated") ;
   }
 
   if (dsTimer) {
@@ -524,6 +525,7 @@ void loop()
       if (timeDS >= 300) { // длительность импульса в ЭБУ на М+ М- здесь 300 мс, выставляется по месту
         digitalWrite(DS_minus, LOW); // снимаем сигнал M-
         digitalWrite(DS_plus, LOW); // снимаем сигнал M+
+        Serial.print ("DS MINUS PLUS  DEactivated") ;
         timeDS = 0; // обнуляем выдержку
         dsTimer = 0; // останавливаем таймер
       }
