@@ -23,7 +23,7 @@ const uint8_t canMsgP[15][5] = {
   {0xBC, 0x0D, 0x20, 0x0C, 0xFF},
   {0x06, 0x0E, 0x20, 0x0C, 0xFF},
 };
-const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};  
+const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};
 const uint8_t canMsgSP[15][7] = {
   {0x1A1, 5, 0xFC, 0xC6, 0x00, 0x00, 0x81},
   {0x1A1, 5, 0x61, 0xC7, 0x00, 0x00, 0x81},
@@ -131,8 +131,8 @@ const uint8_t canMsgR[15][5] = {
 };
 //---------------------------------------------------------------
 
-int mot1 = 5; // задаем выход на моторчик, определяется по месту
-int mot2 = 6; // задаем выход на моторчик
+int mot1 = 6; // задаем выход на моторчик, определяется по месту
+int mot2 = 5; // задаем выход на моторчик
 int inP = 4; // задаем вход от ингибитора P
 int inR = 7; // задаем вход от ингибитора R
 int inN = 8; // задаем вход от ингибитора N
@@ -176,6 +176,11 @@ byte timerR = 0;
 byte timerN = 0;
 byte timerP = 0;
 
+
+byte currentSum = 0; // переменные для проверки изменения состояния ингибитора
+byte sum = 0;
+
+
 //---------------------------------------------------------------------
 
 
@@ -211,7 +216,8 @@ static const uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL ; // 16 MHz
 void setup()
 {
   error = 0; // при сбросе выставляем состояние без ошибок
-  
+  moving = 0;
+
   pinMode(mot1, OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
   pinMode(mot2, OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
 
@@ -241,13 +247,11 @@ void setup()
   }
   //-----------------------------------------
 
-  Serial.println("INIT");
-  Serial.println(inhibitorP);
-  Serial.println(inhibitorR);
-  Serial.println(inhibitorN);
-  Serial.println(inhibitorD);
-
-
+  //Serial.println("INIT");
+  //Serial.println(inhibitorP);
+  //Serial.println(inhibitorR);
+  //Serial.println(inhibitorN);
+  //Serial.println(inhibitorD);
 
   // от борохова инициализация
   SPI.begin () ;
@@ -279,30 +283,126 @@ void setup()
 
 void loop()
 {
+
+  ///
+  /// БЛОК ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА, выполняется каждые 100 мс
+  /// взято у борохова с доработками
+
+  if (gSendDate < millis ()) {
+    currentSum = inhibitorP * 1 + inhibitorR * 2 + inhibitorN * 4 + inhibitorD * 16;
+    if (sum != currentSum) {
+
+      CANMessage message;
+      message.id = 0x3FD;
+      message.len = 5;
+      if (inhibitorD) {
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgD[SendMsgcount][i];
+        }
+        ok = can.tryToSend (message) ;
+      } else if (inhibitorP)
+      {
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgP[SendMsgcount][i];
+        }
+        ok = can.tryToSend (message) ;
+      } else if (inhibitorR) {
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgR[SendMsgcount][i];
+        }
+        ok = can.tryToSend (message) ;
+      } else if (inhibitorN) {
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgN[SendMsgcount][i];
+          //message.data[0]+=SendMsgDcount*10;
+        }
+        ok = can.tryToSend (message) ;
+      } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgDS[SendMsgcount][i];
+        }
+        ok = can.tryToSend (message) ;
+      }
+
+      if (ok) {
+        Serial.print (message.id, HEX) ;
+        for (int i = 0; i < 5; i++) {
+          /*        Serial.print ("  ") ;
+                  Serial.print (message.data[i], HEX) ;
+                }
+
+                Serial.println();
+                Serial.print("П=");
+                Serial.println(P_trans);
+          */
+          gSendDate += 50 ; // период выдачи сообщений
+
+          SendMsgcount++;
+          if (SendMsgcount > 14) SendMsgcount = 0;
+        }
+      } else if (gSendDate1000 < millis()) {
+        CANMessage message;
+        message.id = 0x130;
+        message.len = 5;
+        for (int i = 0; i < 5; i++) {
+          message.data[i] = canMsgEn[i];
+        }
+        ok = can.tryToSend (message) ;
+        if (ok) {
+          gSendDate1000 += 1000 ; // контроль пробуждения ??? проверить должен быть <750 мс
+        }
+      } else if (gSendDate200 < millis()) {
+        CANMessage message;
+        message.id = 0xA1A;
+        message.len = 5;
+        for (int i = 2; i < 7; i++) {
+          message.data[i] = canMsgSP[SendMsgSPcount][i];
+        }
+        ok = can.tryToSend (message) ;
+        if (ok) {
+          gSendDate200 += 200 ;
+        }
+        SendMsgSPcount++;
+        if (SendMsgSPcount > 14) SendMsgSPcount = 0;
+      }
+      sum = currentSum;
+    }
+  }
+
+  ///
+  /// КОНЕЦ БЛОКА ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА
+  ///
+
+
+
+
+
   // БЛОК КОДА ДЛЯ ТЕСТА
+
+
   if (inhibitorP) {
-    Serial.println("Parking");
+    //Serial.println("Parking");
   }
   if (digitalRead(inP) == LOW) {
-    Serial.println("READ Parking");
+    //Serial.println("READ Parking");
   }
   if (inhibitorR) {
-    Serial.println("Reverse");
+    //Serial.println("Reverse");
   }
   if (digitalRead(inR) == LOW) {
-    Serial.println("READ Reverse");
+    //Serial.println("READ Reverse");
   }
   if (inhibitorN) {
-    Serial.println("Neutral");
+    //Serial.println("Neutral");
   }
   if (digitalRead(inN) == LOW) {
-    Serial.println("READ Neutral");
+    //Serial.println("READ Neutral");
   }
   if (inhibitorD) {
-    Serial.println("Drive");
+    //Serial.println("Drive");
   }
   if (digitalRead(inD) == LOW) {
-    Serial.println("READ Drive");
+    //Serial.println("READ Drive");
   }
   // КОНЕЦ БЛОКА КОДА ДЛЯ ТЕСТА
 
@@ -338,7 +438,8 @@ void loop()
         DS_trans = 0;
         LongDown = 0;
       }
-    } else if (frame.data[2] == 0x3E) //Короткое на себя
+    }
+    else if (frame.data[2] == 0x3E) //Короткое на себя
     {
       ShortDown++;
       if (ShortDown > 8)
@@ -363,7 +464,8 @@ void loop()
       turnMinus = 0;
       turnPlus = 0;
       DS_trans = 0;
-    } else if (frame.data[2] == 0x2E) //Длинное от себя
+    }
+    else if (frame.data[2] == 0x2E) //Длинное от себя
     {
       LongUp++;
       if (LongUp > 8) {
@@ -377,7 +479,8 @@ void loop()
         DS_trans = 0;
         LongUp = 0;
       }
-    } else if (frame.data[2] == 0x1E) //Короткое от себя
+    }
+    else if (frame.data[2] == 0x1E) //Короткое от себя
     {
       ShortUp++;
       if (ShortUp > 8) {
@@ -404,18 +507,24 @@ void loop()
       turnMinus = 0;
       turnPlus = 0;
       DS_trans = 1;
-    } else if (frame.data[2] == 0x5E) //D/S-
+    }
+    else if (frame.data[2] == 0x5E) //D/S-
     {
       turnMinus = 1;
       turnPlus = 0;
 
-    } else if (frame.data[2] == 0x6E) //D/S+
+    }
+    else if (frame.data[2] == 0x6E) //D/S+
     {
       //надо включить реле +
       turnMinus = 0;
       turnPlus = 1;
     }
-    
+    else if (frame.data[2] == 0x0E) // если джойстик выдает 0E значит он в нейтральном положении, в положении DS он постоянно выдает 7E
+    {
+      // по этому факту сбрасываем состояние DS
+      DS_trans = 0;
+    }
     else { // если нет сообщений, то обнуляем все переменные, кроме DS_trans
       long2self = 0;
       short2self = 0;
@@ -428,8 +537,11 @@ void loop()
   }
 
   // если моторчик в движении, то игнорируем все сообщения от джойстика
-  // здесь можно добавить проверку на ошибки или 
-  if (moving) {
+  // здесь можно добавить проверку на ошибки
+
+
+  if (moving == 1) {
+    //Serial.println("OK"); // для теста
     long2self = 0;
     short2self = 0;
     longFromSelf = 0;
@@ -490,32 +602,32 @@ void loop()
     }
   }
 
-  if (pressedP && !inhibitorP) { // если кнопка нажата и коробка не в паркинге
+  if (pressedP && !inhibitorP) { // если кнопка нажата и коробка не в паркинге, чтобы лишний раз мотор не дергать
     analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2P = 1; // выставляем флаг работы моторчика до положения P
 
   }
 
-  if (DS_trans && inhibitorD) { // выбран режим DS и коробка в D
+  if (DS_trans == 1) { // выбран режим DS
     digitalWrite(DS_out, HIGH);
-    Serial.print ("DS activated") ;
-  }
-  if (!DS_trans) { // возврат DS
+    //Serial.print ("DS activated") ;
+  } else {
+    // возврат DS
     digitalWrite(DS_out, LOW);
-    Serial.print ("DS DEactivated") ;
+    //Serial.print ("DS DEactivated") ;
   }
 
   if (DS_trans && turnMinus) {
     dsTimer = 1; // запускаем таймер
     digitalWrite(DS_minus, HIGH);
-    Serial.print ("DS MINUS activated") ;
+    //Serial.print ("DS MINUS activated") ;
   }
 
   if (DS_trans && turnPlus) {
     dsTimer = 1; // запускаем таймер
     digitalWrite(DS_plus, HIGH);
-    Serial.print ("DS PLUS activated") ;
+    //Serial.print ("DS PLUS activated") ;
   }
 
   if (dsTimer) {
@@ -525,7 +637,6 @@ void loop()
       if (timeDS >= 300) { // длительность импульса в ЭБУ на М+ М- здесь 300 мс, выставляется по месту
         digitalWrite(DS_minus, LOW); // снимаем сигнал M-
         digitalWrite(DS_plus, LOW); // снимаем сигнал M+
-        Serial.print ("DS MINUS PLUS  DEactivated") ;
         timeDS = 0; // обнуляем выдержку
         dsTimer = 0; // останавливаем таймер
       }
@@ -589,89 +700,7 @@ void loop()
   /// КОНЕЦ БЛОКА КОНТРОЛЯ МОТОРЧИКА
 
 
-  ///
-  /// БЛОК ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА, выполняется каждые 200 мс
-  /// взято у борохова с доработками
 
-  if (gSendDate < millis ()) {
-    CANMessage message, message1;
-    message.id = 0x3FD;
-    message.len = 5;
-    if (inhibitorD) {
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgD[SendMsgcount][i];
-      }
-      ok = can.tryToSend (message) ;
-    } else if (inhibitorP)
-    {
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgP[SendMsgcount][i];
-      }
-      ok = can.tryToSend (message) ;
-    } else if (inhibitorR) {
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgR[SendMsgcount][i];
-      }
-      ok = can.tryToSend (message) ;
-    } else if (inhibitorN) {
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgN[SendMsgcount][i];
-        //message.data[0]+=SendMsgDcount*10;
-      }
-      ok = can.tryToSend (message) ;
-    } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgDS[SendMsgcount][i];
-      }
-      ok = can.tryToSend (message) ;
-    }
-
-    if (ok) {
-      Serial.print (message.id, HEX) ;
-      for (int i = 0; i < 5; i++) {
-        /*        Serial.print ("  ") ;
-                Serial.print (message.data[i], HEX) ;
-              }
-
-              Serial.println();
-              Serial.print("П=");
-              Serial.println(P_trans);
-        */
-        gSendDate += 200 ;
-
-        SendMsgcount++;
-        if (SendMsgcount > 14) SendMsgcount = 0;
-      }
-    } else if (gSendDate1000 < millis()) {
-      CANMessage message;
-      message.id = 0x130;
-      message.len = 5;
-      for (int i = 0; i < 5; i++) {
-        message.data[i] = canMsgEn[i];
-      }
-      ok = can.tryToSend (message) ;
-      if (ok) {
-        gSendDate1000 += 200 ;
-      }
-    } else if (gSendDate200 < millis()) {
-      CANMessage message;
-      message.id = 0xA1A;
-      message.len = 5;
-      for (int i = 2; i < 7; i++) {
-        message.data[i] = canMsgSP[SendMsgSPcount][i];
-      }
-      ok = can.tryToSend (message) ;
-      if (ok) {
-        gSendDate200 += 200 ;
-      }
-      SendMsgSPcount++;
-      if (SendMsgSPcount > 14) SendMsgSPcount = 0;
-    }
-  }
-
-  ///
-  /// КОНЕЦ БЛОКА ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА
-  ///
 
   ///
   /// БЛОК СЧИТЫВАНИЯ ПОЛОЖЕНИЯ ИНГИБИТОРА
@@ -685,7 +714,7 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerD = 0;
-      if (timerP > 2) {
+      if (timerP > 3) {
         inhibitorP = 1; // через 30 мс выставляем P, время по месту регулируется
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
@@ -697,7 +726,7 @@ void loop()
       timerP = 0;
       timerN = 0;
       timerD = 0;
-      if (timerR > 2) {
+      if (timerR > 3) {
         inhibitorP = 0; // через 30 мс выставляем R
         inhibitorR = 1; // остальные сбрасываем
         inhibitorN = 0;
@@ -710,7 +739,7 @@ void loop()
       timerR = 0;
       timerP = 0;
       timerD = 0;
-      if (timerN > 2) {
+      if (timerN > 3) {
         inhibitorP = 0; // через 30 мс выставляем N
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 1;
@@ -724,7 +753,7 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerP = 0;
-      if (timerD > 2) {
+      if (timerD > 3) {
         inhibitorP = 0; // через 30 мс выставляем D
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
