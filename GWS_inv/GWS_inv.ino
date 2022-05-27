@@ -289,7 +289,7 @@ void loop()
   /// взято у борохова с доработками
 
   if (gSendDate < millis ()) {
-    currentSum = inhibitorP * 1 + inhibitorR * 2 + inhibitorN * 4 + inhibitorD * 16;
+    currentSum = inhibitorP * 1 + inhibitorR * 2 + inhibitorN * 4 + inhibitorD * 8+ DS_trans * 16;
     if (sum != currentSum) {
 
       CANMessage message;
