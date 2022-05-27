@@ -261,12 +261,14 @@ static const uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL ; // 16 MHz
 
 void setup () {
 
+ Serial.begin(9600); // для тестирования
+ 
   //--- Start serial
   //  Serial.begin (115200) ;
   //--- Wait for serial (blink led at 10 Hz during waiting)
-//  while (!Serial) {
-//    delay (50) ;
-//  }
+  //  while (!Serial) {
+  //    delay (50) ;
+  //  }
   //--- Begin SPI
   SPI.begin () ;
   //--- Configure ACAN2515
@@ -317,140 +319,146 @@ void loop () {
       Serial.print (frame.data[i], HEX) ;
     }
     Serial.println();
-      if (frame.data[2] == 0x4E) //Длинное на себя
+    if (frame.data[2] == 0x4E) //Длинное на себя
+    {
+      LongDown++;
+      if (LongDown > 8)
       {
-        LongDown++;
-        if (LongDown > 8)
-        {
-          D_trans = 1;
-          P_trans = 0;
-          R_trans = 0;
-          DS_trans = 0;
-          LongDown = 0;
-        }
-      } else if (frame.data[2] == 0x3E) //Короткое на себя
-      {
-        ShortDown++;
-        if (ShortDown > 8)
-        {
-          if (P_trans) {
-            D_trans = 1;
-            P_trans = 0;
-            R_trans = 0;
-            DS_trans = 0;
-          } else if (R_trans) {
-            N_trans = 1;
-            R_trans = 0;
-            DS_trans = 0;
-          } else if (N_trans) {
-            D_trans = 1;
-            P_trans = 0;
-            R_trans = 0;
-            N_trans = 0;
-            DS_trans = 0;
-          }
-          ShortDown = 0;
-        }
-      } else if (frame.data[3] == 0xD5)  {
-        D_trans = 0;
-        P_trans = 1;
+        D_trans = 1;
+        P_trans = 0;
         R_trans = 0;
-        N_trans = 0;
         DS_trans = 0;
-      } else if (frame.data[2] == 0x2E) //Длинное от себя
+        LongDown = 0;
+      }
+    } else if (frame.data[2] == 0x3E) //Короткое на себя
+    {
+      ShortDown++;
+      if (ShortDown > 8)
       {
-        LongUp++;
-        if (LongUp > 8) {
+        if (P_trans) {
           D_trans = 0;
           P_trans = 0;
           R_trans = 1;
           DS_trans = 0;
-          LongUp = 0;
+        } else if (R_trans) {
+          N_trans = 1;
+          R_trans = 0;
+          DS_trans = 0;
+        } else if (N_trans) {
+          D_trans = 1;
+          P_trans = 0;
+          R_trans = 0;
+          N_trans = 0;
+          DS_trans = 0;
         }
-      } else if (frame.data[2] == 0x1E) //Короткое от себя
-      {
-        ShortUp++;
-        if (ShortUp > 8) {
-          if (D_trans) {
-            D_trans = 0;
-            P_trans = 0;
-            R_trans = 0;
-            N_trans = 1;
-            DS_trans = 0;
-          } else if (N_trans) {
-            D_trans = 0;
-            P_trans = 0;
-            R_trans = 1;
-            N_trans = 0;
-            DS_trans = 0;
-
-          }
-          ShortUp = 0;
-        }
-      } else if (frame.data[2] == 0x7E && !P_trans) //D/S
-      {
-        //надо включить реле на D/S
+        ShortDown = 0;
+      }
+    } else if (frame.data[3] == 0xD5)  {
+      D_trans = 0;
+      P_trans = 1;
+      R_trans = 0;
+      N_trans = 0;
+      DS_trans = 0;
+    } else if (frame.data[2] == 0x2E) //Длинное от себя
+    {
+      LongUp++;
+      if (LongUp > 8) {
         D_trans = 0;
         P_trans = 0;
-        R_trans = 0;
-        N_trans = 0;
-        DS_trans = 1;
-      }else if (frame.data[2] == 0x5E) //D/S-
-      {
-        //надо включить реле -
-
-      }else if (frame.data[2] == 0x6E) //D/S+
-      {
-        //надо включить реле +
-
+        R_trans = 1;
+        DS_trans = 0;
+        LongUp = 0;
       }
+    } else if (frame.data[2] == 0x1E) //Короткое от себя
+    {
+      ShortUp++;
+      if (ShortUp > 8) {
+        if (D_trans) {
+          D_trans = 0;
+          P_trans = 0;
+          R_trans = 0;
+          N_trans = 1;
+          DS_trans = 0;
+        } else if (N_trans) {
+          D_trans = 0;
+          P_trans = 0;
+          R_trans = 1;
+          N_trans = 0;
+          DS_trans = 0;
+
+        }
+        ShortUp = 0;
+      }
+    } else if (frame.data[2] == 0x7E && !P_trans) //D/S
+    {
+      Serial.print ("  7E ") ;
+      D_trans = 0;
+      P_trans = 0;
+      R_trans = 0;
+      N_trans = 0;
+      DS_trans = 1;
+    } else if (frame.data[2] == 0x5E) //D/S-
+    {
+      //надо включить реле -
+
+    } else if (frame.data[2] == 0x6E) //D/S+
+    {
+      Serial.print ("  6E ") ;
 
     }
-    if (gSendDate < millis ()) {
-      CANMessage message, message1;
-      message.id = 0x3FD;
-      message.len = 5;
-      if (D_trans) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgD[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (P_trans)
-      {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgP[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (R_trans) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgR[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (N_trans) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgN[SendMsgcount][i];
-          //message.data[0]+=SendMsgDcount*10;
-        }
-        ok = can.tryToSend (message) ;
-      } else if (DS_trans) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgDS[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
+    else if (frame.data[2] == 0x0E) //D/S+
+    {
+      Serial.print ("  0E ") ;
+
+    }
+
+
+  }
+  if (gSendDate < millis ()) {
+    CANMessage message, message1;
+    message.id = 0x3FD;
+    message.len = 5;
+    if (D_trans) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgD[SendMsgcount][i];
       }
+      ok = can.tryToSend (message) ;
+    } else if (P_trans)
+    {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgP[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    } else if (R_trans) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgR[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    } else if (N_trans) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgN[SendMsgcount][i];
+        //message.data[0]+=SendMsgDcount*10;
+      }
+      ok = can.tryToSend (message) ;
+    } else if (DS_trans) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgDS[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    }
 
-      if (ok) {
-        Serial.print (message.id, HEX) ;
-        for (int i = 0; i < 5; i++) {
-  /*        Serial.print ("  ") ;
-          Serial.print (message.data[i], HEX) ;
-        }
+    if (ok) {
+      Serial.print (message.id, HEX) ;
+      for (int i = 0; i < 5; i++) {
+        /*        Serial.print ("  ") ;
+                Serial.print (message.data[i], HEX) ;
+              }
 
-        Serial.println();
-        Serial.print("П=");
-        Serial.println(P_trans);
+              Serial.println();
+              Serial.print("П=");
+              Serial.println(P_trans);
         */
-        gSendDate += 200 ;
+        gSendDate += 50 ;
 
         SendMsgcount++;
         if (SendMsgcount > 14) SendMsgcount = 0;
@@ -485,4 +493,4 @@ void loop () {
 }
 
 
-  //——————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————

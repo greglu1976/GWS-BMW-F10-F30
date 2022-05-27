@@ -289,85 +289,86 @@ void loop()
   /// взято у борохова с доработками
 
   if (gSendDate < millis ()) {
-    currentSum = inhibitorP * 1 + inhibitorR * 2 + inhibitorN * 4 + inhibitorD * 8+ DS_trans * 16;
-    if (sum != currentSum) {
 
-      CANMessage message;
-      message.id = 0x3FD;
-      message.len = 5;
-      if (inhibitorD) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgD[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorP)
-      {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgP[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorR) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgR[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
-      } else if (inhibitorN) {
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgN[SendMsgcount][i];
-          //message.data[0]+=SendMsgDcount*10;
-        }
-        ok = can.tryToSend (message) ;
-      } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgDS[SendMsgcount][i];
-        }
-        ok = can.tryToSend (message) ;
+
+    CANMessage message;
+    message.id = 0x3FD;
+    message.len = 5;
+    if (inhibitorD) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgD[SendMsgcount][i];
       }
-
-      if (ok) {
-        Serial.print (message.id, HEX) ;
-        for (int i = 0; i < 5; i++) {
-          /*        Serial.print ("  ") ;
-                  Serial.print (message.data[i], HEX) ;
-                }
-
-                Serial.println();
-                Serial.print("П=");
-                Serial.println(P_trans);
-          */
-          gSendDate += 50 ; // период выдачи сообщений
-
-          SendMsgcount++;
-          if (SendMsgcount > 14) SendMsgcount = 0;
-        }
-      } else if (gSendDate1000 < millis()) {
-        CANMessage message;
-        message.id = 0x130;
-        message.len = 5;
-        for (int i = 0; i < 5; i++) {
-          message.data[i] = canMsgEn[i];
-        }
-        ok = can.tryToSend (message) ;
-        if (ok) {
-          gSendDate1000 += 1000 ; // контроль пробуждения ??? проверить должен быть <750 мс
-        }
-      } else if (gSendDate200 < millis()) {
-        CANMessage message;
-        message.id = 0xA1A;
-        message.len = 5;
-        for (int i = 2; i < 7; i++) {
-          message.data[i] = canMsgSP[SendMsgSPcount][i];
-        }
-        ok = can.tryToSend (message) ;
-        if (ok) {
-          gSendDate200 += 200 ;
-        }
-        SendMsgSPcount++;
-        if (SendMsgSPcount > 14) SendMsgSPcount = 0;
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorP)
+    {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgP[SendMsgcount][i];
       }
-      sum = currentSum;
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorR) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgR[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
+    } else if (inhibitorN) {
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgN[SendMsgcount][i];
+        //message.data[0]+=SendMsgDcount*10;
+      }
+      ok = can.tryToSend (message) ;
+    } else if (DS_trans) { // положения DS на ингибиторе и коробке нет, оно виртуальное, отправляем сразу на джойстик
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgDS[SendMsgcount][i];
+      }
+      ok = can.tryToSend (message) ;
     }
+
+
+
+    if (ok) {
+      //Serial.print (message.id, HEX) ;
+      for (int i = 0; i < 5; i++) {
+        /*        Serial.print ("  ") ;
+                Serial.print (message.data[i], HEX) ;
+              }
+
+              Serial.println();
+              Serial.print("П=");
+              Serial.println(P_trans);
+        */
+        gSendDate += 50 ; // период выдачи сообщений
+
+        SendMsgcount++;
+        if (SendMsgcount > 14) SendMsgcount = 0;
+      }
+    } else if (gSendDate1000 < millis()) {
+      CANMessage message;
+      message.id = 0x130;
+      message.len = 5;
+      for (int i = 0; i < 5; i++) {
+        message.data[i] = canMsgEn[i];
+      }
+      ok = can.tryToSend (message) ;
+      if (ok) {
+        gSendDate1000 += 1000 ; // контроль пробуждения ??? проверить должен быть <750 мс
+      }
+    } else if (gSendDate200 < millis()) {
+      CANMessage message;
+      message.id = 0xA1A;
+      message.len = 5;
+      for (int i = 2; i < 7; i++) {
+        message.data[i] = canMsgSP[SendMsgSPcount][i];
+      }
+      ok = can.tryToSend (message) ;
+      if (ok) {
+        gSendDate200 += 200 ;
+      }
+      SendMsgSPcount++;
+      if (SendMsgSPcount > 14) SendMsgSPcount = 0;
+    }
+
   }
+
 
   ///
   /// КОНЕЦ БЛОКА ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА
@@ -609,7 +610,7 @@ void loop()
 
   }
 
-  if (DS_trans == 1) { // выбран режим DS
+  if (DS_trans) { // выбран режим DS
     digitalWrite(DS_out, HIGH);
     //Serial.print ("DS activated") ;
   } else {
