@@ -24,6 +24,9 @@ const uint8_t canMsgP[15][5] = {
   {0x06, 0x0E, 0x20, 0x0C, 0xFF},
 };
 const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};
+
+const uint8_t canMsgLite[2] = {0xFD, 0x00};
+
 const uint8_t canMsgSP[15][7] = {
   {0x1A1, 5, 0xFC, 0xC6, 0x00, 0x00, 0x81},
   {0x1A1, 5, 0x61, 0xC7, 0x00, 0x00, 0x81},
@@ -141,6 +144,7 @@ int inD = 9; // задаем вход от ингибитора D
 int DS_minus = 14; // задаем выход на ЭБУ режим M-, A0
 int DS_plus = 15; // задаем выход на ЭБУ режим M+, A1
 int DS_out = 16; // задаем выход на ЭБУ режим DS, A2
+int error_out = 17; // выход на ошибку, A3
 
 
 //----------------------------------------------------------------------
@@ -156,6 +160,7 @@ byte shortFromSelf = 0;
 byte pressedP = 0;
 byte turnMinus = 0;
 byte turnPlus = 0;
+byte power = 0;
 
 byte moving = 0 ;
 byte moving2R = 0;
@@ -217,6 +222,7 @@ void setup()
 {
   error = 0; // при сбросе выставляем состояние без ошибок
   moving = 0;
+  power = 0xFF; // задаем мощность моторчика 0xFF максимальная
 
   pinMode(mot1, OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
   pinMode(mot2, OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
@@ -229,6 +235,7 @@ void setup()
   pinMode(DS_minus, OUTPUT); // инициализируем выход на ЭБУ
   pinMode(DS_plus, OUTPUT); // инициализируем выход на ЭБУ
   pinMode(DS_out, OUTPUT); // инициализируем выход на ЭБУ
+  pinMode(error_out, OUTPUT); // инициализируем выход на ЭБУ
 
   Serial.begin(9600); // для тестирования
 
@@ -284,17 +291,30 @@ void setup()
 void loop()
 {
 
+  /// подсветка
+
+  CANMessage messageLite;
+  messageLite.id = 0x202;
+  messageLite.len = 3;
+  for (int i = 0; i < 1; i++) {
+    messageLite.data[i] = canMsgLite[i];
+  }
+  ok = can.tryToSend (messageLite) ;
+
+
+
   ///
-  /// БЛОК ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА, выполняется каждые 100 мс
+  /// БЛОК ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА, выполняется каждые 50 мс
   /// взято у борохова с доработками
 
   if (gSendDate < millis ()) {
 
 
+
     CANMessage message;
     message.id = 0x3FD;
     message.len = 5;
-    if (inhibitorD) {
+    if (inhibitorD && !DS_trans) { // если ингибитор в драйве и введен режим DS то посылать не надо D, надо посылать DS
       for (int i = 0; i < 5; i++) {
         message.data[i] = canMsgD[SendMsgcount][i];
       }
@@ -525,8 +545,7 @@ void loop()
     {
       // по этому факту сбрасываем состояние DS
       DS_trans = 0;
-    }
-    else { // если нет сообщений, то обнуляем все переменные, кроме DS_trans
+      // если нет сообщений, то обнуляем все переменные, кроме DS_trans
       long2self = 0;
       short2self = 0;
       longFromSelf = 0;
@@ -563,48 +582,48 @@ void loop()
   //
 
   if (long2self) {
-    analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
+    analogWrite(mot1, power); // запускаем моторчик прямо, т.е. от P->D
     moving = 1; // выставляем флаг работы моторчика
     moving2D = 1; // выставляем флаг работы моторчика до положения D
   }
   if (short2self) {
     if (inhibitorP) {
-      analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
+      analogWrite(mot1, power); // запускаем моторчик прямо, т.е. от P->D
       moving = 1; // выставляем флаг работы моторчика
       moving2R = 1; // выставляем флаг работы моторчика до положения R
     }
     if (inhibitorR) {
-      analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
+      analogWrite(mot1, power); // запускаем моторчик прямо, т.е. от P->D
       moving = 1; // выставляем флаг работы моторчика
       moving2N = 1; // выставляем флаг работы моторчика до положения N
     }
     if (inhibitorN) {
-      analogWrite(mot1, 0xFF); // запускаем моторчик прямо, т.е. от P->D
+      analogWrite(mot1, power); // запускаем моторчик прямо, т.е. от P->D
       moving = 1; // выставляем флаг работы моторчика
       moving2D = 1; // выставляем флаг работы моторчика до положения D
     }
   }
 
-  if (longFromSelf) {
-    analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
+  if (longFromSelf && inhibitorD) {
+    analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2R = 1; // выставляем флаг работы моторчика до положения R
   }
   if (shortFromSelf) {
     if (inhibitorD) {
-      analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
+      analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
       moving = 1; // выставляем флаг работы моторчика
       moving2N = 1; // выставляем флаг работы моторчика до положения N
     }
     if (inhibitorN) {
-      analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
+      analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
       moving = 1; // выставляем флаг работы моторчика
       moving2R = 1; // выставляем флаг работы моторчика до положения R
     }
   }
 
-  if (pressedP && !inhibitorP) { // если кнопка нажата и коробка не в паркинге, чтобы лишний раз мотор не дергать
-    analogWrite(mot2, 0xFF); // запускаем моторчик обратно, т.е. от D->P
+  if (pressedP && !inhibitorP) { // если кнопка нажата и коробка не в паркинге, чтобы лишний раз моторчик не дергать
+    analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2P = 1; // выставляем флаг работы моторчика до положения P
 
@@ -653,11 +672,11 @@ void loop()
   //
   // БЛОК КОНТРОЛЯ РАБОТЫ МОТОРЧИКА
   // Контролируем движение моторчика и время его работы (если больше 5 секунд то останавливаем, время настраивается по месту)
-  if (millis() - tmr >= 50) {
+  if (millis() - tmr >= 100) {
     tmr = millis();
     if (moving == 1) {
       operTime = operTime + 1;
-      if (operTime >= 100) {
+      if (operTime >= 50) {
         analogWrite(mot1, 0); // обнуляем выхода ардуино
         analogWrite(mot2, 0); // для останова моторчика
         moving = 0 ; // снимаем флаги движения
@@ -665,7 +684,7 @@ void loop()
         moving2N = 0;
         moving2D = 0;
         moving2P = 0;
-        error = 1; // выставляем ошибку превышение времени работы моторчика
+        error = 1; // выставляем ошибку превышение времени работы моторчика, обнуляется рестартом платы ардуино
         operTime = 0;
       }
     }
@@ -707,7 +726,7 @@ void loop()
   /// БЛОК СЧИТЫВАНИЯ ПОЛОЖЕНИЯ ИНГИБИТОРА
   ///
 
-  if (millis() - InhibTimer >= 15) {
+  if (millis() - InhibTimer >= 1) {
     InhibTimer = millis();
 
     if (digitalRead(inP) == LOW) {
@@ -715,8 +734,8 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerD = 0;
-      if (timerP > 3) {
-        inhibitorP = 1; // через 30 мс выставляем P, время по месту регулируется
+      if (timerP > 10) {
+        inhibitorP = 1; // через 10 мс выставляем P, время по месту регулируется
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 0;
@@ -727,8 +746,8 @@ void loop()
       timerP = 0;
       timerN = 0;
       timerD = 0;
-      if (timerR > 3) {
-        inhibitorP = 0; // через 30 мс выставляем R
+      if (timerR > 10) {
+        inhibitorP = 0; // через 10 мс выставляем R
         inhibitorR = 1; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 0;
@@ -740,8 +759,8 @@ void loop()
       timerR = 0;
       timerP = 0;
       timerD = 0;
-      if (timerN > 3) {
-        inhibitorP = 0; // через 30 мс выставляем N
+      if (timerN > 10) {
+        inhibitorP = 0; // через 10 мс выставляем N
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 1;
         inhibitorD = 0;
@@ -754,8 +773,8 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerP = 0;
-      if (timerD > 3) {
-        inhibitorP = 0; // через 30 мс выставляем D
+      if (timerD > 10) {
+        inhibitorP = 0; // через 10 мс выставляем D
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 1;
@@ -763,4 +782,17 @@ void loop()
       }
     }
   }
+
+  // БЛОК ФИКСАЦИИ ОШИБКИ
+  // сейчас по превышению времени работы моторчика, можно добавить по отсутствию сигналов от ингибитора
+  //
+
+  if (error) 
+  {
+     digitalWrite(error_out, HIGH); // выдаем на выход
+  }
+  else {
+    digitalWrite(error_out, LOW); // снимаем с выхода
+  }
+  // КОНЕЦ БЛОКА ФИКСАЦИИ ОШИБКИ
 }
