@@ -25,8 +25,6 @@ const uint8_t canMsgP[15][5] = {
 };
 const uint8_t canMsgEn[5] = {0x05, 0xF0, 0xFC, 0xFF, 0xFF};
 
-const uint8_t canMsgLite[2] = {0xFD, 0x00}; // подсветка
-
 const uint8_t canMsgSP[15][7] = {
   {0x1A1, 5, 0xFC, 0xC6, 0x00, 0x00, 0x81},
   {0x1A1, 5, 0x61, 0xC7, 0x00, 0x00, 0x81},
@@ -140,6 +138,7 @@ int inP = 4; // задаем вход от ингибитора P
 int inR = 7; // задаем вход от ингибитора R
 int inN = 8; // задаем вход от ингибитора N
 int inD = 9; // задаем вход от ингибитора D
+int ignition = 19; // задаем вход для зажигания A5
 
 int DS_minus = 14; // задаем выход на ЭБУ режим M-, A0
 int DS_plus = 15; // задаем выход на ЭБУ режим M+, A1
@@ -173,13 +172,17 @@ byte dsTimer = 0;
 
 uint32_t Timer = 0;
 uint32_t tmr = 0;
+uint32_t tmrNoIgnition = 0;
+uint32_t cntNoIgnition = 0;
 uint32_t InhibTimer = 0;
+
 int timeDS = 0;
 
 byte timerD = 0;
 byte timerR = 0;
 byte timerN = 0;
 byte timerP = 0;
+byte noIgnition = 0;
 
 
 byte currentSum = 0; // переменные для проверки изменения состояния ингибитора
@@ -217,18 +220,30 @@ ACAN2515 can (MCP2515_CS, SPI, MCP2515_INT) ;
 static const uint32_t QUARTZ_FREQUENCY = 8UL * 1000UL * 1000UL ; // 16 MHz
 
 
+// БЛОК ДЛЯ ДАТЧИКА СКОРОСТИ
+int values [5] = {0, 0, 0, 0, 0}; // массив для выборок - смотрим 5 выборок
+uint32_t tmrIRS = 0; // таймер для блока датчика скорости
+byte blockSpeed = 0; // блокировка по скорости
+volatile int cnt = 0;
+void impulse() {
+  cnt++;
+}
+// КОНЕЦ БЛОКА ДЛЯ ДАТЧИКА СКОРОСТИ
 
 void setup()
 {
+  attachInterrupt(1, impulse, RISING); // подключаем прерывания по входу от датчика скорости
+  blockSpeed = 1; // блокировка по скорости, на всякий случай заблокируем при инициализации
+
   // ПЕРЕМЕННЫЕ РЕЖИМА
   // можно менять для достижения требуемого режима работы
   power = 0xFF; // задаем мощность моторчика 0xFF максимальная (меняется от 0x00 до 0xFF)
-  
+
   //
-  
+
   error = 0; // при сбросе выставляем состояние без ошибок
   moving = 0;
-  
+
 
   pinMode(mot1, OUTPUT); // инициализируем первый выход на моторчик (ШИМ)
   pinMode(mot2, OUTPUT); // инициализируем второй выход на моторчик (ШИМ)
@@ -237,6 +252,7 @@ void setup()
   pinMode(inR, INPUT_PULLUP); // инициализируем вход
   pinMode(inN, INPUT_PULLUP); // инициализируем вход
   pinMode(inD, INPUT_PULLUP); // инициализируем вход
+  pinMode(ignition, INPUT_PULLUP); // инициализируем вход
 
   pinMode(DS_minus, OUTPUT); // инициализируем выход на ЭБУ
   pinMode(DS_plus, OUTPUT); // инициализируем выход на ЭБУ
@@ -260,11 +276,6 @@ void setup()
   }
   //-----------------------------------------
 
-  //Serial.println("INIT");
-  //Serial.println(inhibitorP);
-  //Serial.println(inhibitorR);
-  //Serial.println(inhibitorN);
-  //Serial.println(inhibitorD);
 
   // от борохова инициализация
   SPI.begin () ;
@@ -292,12 +303,12 @@ void setup()
   }
   // конец инициализации от борохова
 
- /// ПОДСВЕТКА
+  /// ПОДСВЕТКА
   CANMessage messageLite;
   messageLite.id = 0x202;
   messageLite.len = 2;
-  messageLite.data[0]=0xFD;
-  messageLite.data[1]=0x00;
+  messageLite.data[0] = 0xFD;
+  messageLite.data[1] = 0x00;
   ok = can.tryToSend (messageLite);
   delay(5);
   ok = can.tryToSend (messageLite);
@@ -308,8 +319,68 @@ void setup()
 
 void loop()
 {
+  ///БЛОК КОНТРОЛЯ СКОРОСТИ
+  if (millis() - tmrIRS >= 1000) // каждую секунду смотрим счетчик прерываний
+  {
+    tmrIRS = millis();
+    // переставляем элементы массива, сдвигаем вправо
+    values[4] = values[3];
+    values[3] = values[2];
+    values[2] = values[1];
+    values[1] = values[0];
+    values[0] = cnt; //нулевой элемент теперь количество прерываний за прошедшую секунду
+    cnt = 0; // сбрасываем счетчик
 
-  ///
+    // на выходе блока имеем массив из 5 выборок за последние 5 секунд
+
+    // складываем все выборки массива
+    sum = 0;
+    for (int i = 0; i < 5; i++) {
+      sum = sum + values[i];
+      Serial.println(sum);
+    }
+    if (sum > 5) { //если число импульсов за 5 секунд больше 5, то считаем что скорость больше 2 км/ч
+      error = 1;// тестовое убрать потом
+      blockSpeed = 1; // блокировка по скорости
+    }
+    else {
+      error = 0; // тестовое убрать потом
+      blockSpeed = 0; // снятие блокировки по скорости
+    }
+  }
+  ///КОНЕЦ БЛОКА КОНТРОЛЯ СКОРОСТИ
+
+
+  ///БЛОК КОНТРОЛЯ СОСТОЯНИЯ НЕТ ЗАЖИГАНИЯ
+  /// контролируется по сигналу от зажигания
+  if (millis() - tmrNoIgnition >= 100)
+  {
+    tmrNoIgnition = millis();
+
+    if (digitalRead(ignition) == HIGH)
+    { // если прошло больше 1 секунды, считаем, что зажигание отключено
+      if (cntNoIgnition > 10)
+      {
+        noIgnition = 1; //выставляем флаг - нет зажигания
+        cntNoIgnition = 0; // сбрасываем счетчик
+      }
+      cntNoIgnition++;
+    }
+  }
+  if (noIgnition == 1 && digitalRead(ignition) == LOW && inhibitorD == 1) // контроль состояния нет зажигания+зажигание+коробка в Драйве
+  {
+    analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
+    moving = 1; // выставляем флаг работы моторчика
+    moving2P = 1; // выставляем флаг работы моторчика до положения P
+  }
+  if (digitalRead(ignition) == LOW)
+  { // если появляется + зажигания , то обнуляем флаг НетЗАжигания
+    noIgnition = 0; //сбрасываем флаг - нет зажигания
+    cntNoIgnition = 0; // сбрасываем счетчик
+  }
+  /// КОНЕЦ БЛОКА КОНТРОЛЯ СОСТОЯНИЯ НЕТ ЗАЖИГАНИЯ
+
+
   /// БЛОК ПЕРЕСЫЛКИ В ДЖОЙСТИК ТЕКУЩЕГО ЗНАЧЕНИЯ ИНГИБИТОРА, выполняется каждые 50 мс
   /// взято у борохова с доработками
 
@@ -408,19 +479,20 @@ void loop()
     can.receive (frame) ;
 
     //тестовый блок
-    Serial.print (frame.id, HEX) ;
-    for (int i = 0; i < 5; i++) {
-      Serial.print ("  ") ;
-      Serial.print (frame.data[i], HEX) ;
-    }
-    Serial.println();
-    //
+    //Serial.print (frame.id, HEX) ;
+    //for (int i = 0; i < 5; i++) {
+    //Serial.print ("  ") ;
+    //Serial.print (frame.data[i], HEX) ;
+    //}
+    //Serial.println();
+    // конец тестового блока
+
     if (frame.id == 0x197)
       //Serial.print (frame.id, HEX) ;
-    for (int i = 0; i < 5; i++) {
-      //Serial.print ("  ") ;
-      //Serial.print (frame.data[i], HEX) ;
-    }
+      for (int i = 0; i < 5; i++) {
+        //Serial.print ("  ") ;
+        //Serial.print (frame.data[i], HEX) ;
+      }
     //Serial.println();
     if (frame.data[2] == 0x4E) //Длинное на себя
     {
@@ -534,12 +606,11 @@ void loop()
     }
   }
 
-  // если моторчик в движении, то игнорируем все сообщения от джойстика
+  // если моторчик в движении или нет зажигания на ардуине, то игнорируем все сообщения от джойстика
   // здесь можно добавить проверку на ошибки
 
 
-  if (moving == 1) {
-    //Serial.println("OK"); // для теста
+  if (moving == 1 || noIgnition == 1) {
     long2self = 0;
     short2self = 0;
     longFromSelf = 0;
@@ -559,7 +630,7 @@ void loop()
   // БЛОК РЕАЛИЗАЦИИ ВЫБРАННЫХ РЕЖИМОВ
   //
 
-  if (long2self) {
+  if (long2self && !blockSpeed) { // если длинное на себя и скорость ниже 2 км/ч
     analogWrite(mot1, power); // запускаем моторчик прямо, т.е. от P->D
     moving = 1; // выставляем флаг работы моторчика
     moving2D = 1; // выставляем флаг работы моторчика до положения D
@@ -582,7 +653,7 @@ void loop()
     }
   }
 
-  if (longFromSelf && inhibitorD) {
+  if (longFromSelf && inhibitorD && !blockSpeed) { // если длинное от себя и скорость ниже 2 км/ч
     analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2R = 1; // выставляем флаг работы моторчика до положения R
@@ -593,18 +664,20 @@ void loop()
       moving = 1; // выставляем флаг работы моторчика
       moving2N = 1; // выставляем флаг работы моторчика до положения N
     }
-    if (inhibitorN) {
+    if (inhibitorN && !blockSpeed) { // блокируем из N в реверс при скорости больше 2 км/ч
       analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
       moving = 1; // выставляем флаг работы моторчика
       moving2R = 1; // выставляем флаг работы моторчика до положения R
     }
   }
 
-  if (pressedP && !inhibitorP) { // если кнопка нажата и коробка не в паркинге, чтобы лишний раз моторчик не дергать
+  if (pressedP && !inhibitorP && !blockSpeed) { // если кнопка нажата и коробка не в паркинге и скорость < 2 км/ч, чтобы лишний раз моторчик не дергать
     analogWrite(mot2, power); // запускаем моторчик обратно, т.е. от D->P
     moving = 1; // выставляем флаг работы моторчика
     moving2P = 1; // выставляем флаг работы моторчика до положения P
-
+  }
+  if (pressedP && inhibitorP) { // если кнопка нажата и коробка в паркинге то сбрасываем ошибку
+    error = 0;
   }
 
   if (DS_trans) { // выбран режим DS
@@ -765,9 +838,9 @@ void loop()
   // сейчас по превышению времени работы моторчика, можно добавить по отсутствию сигналов от ингибитора
   //
 
-  if (error) 
+  if (error)
   {
-     digitalWrite(error_out, HIGH); // выдаем на выход
+    digitalWrite(error_out, HIGH); // выдаем на выход
   }
   else {
     digitalWrite(error_out, LOW); // снимаем с выхода
