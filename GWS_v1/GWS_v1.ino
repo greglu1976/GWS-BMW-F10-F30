@@ -167,6 +167,7 @@ byte moving2N = 0;
 byte moving2D = 0;
 byte moving2P = 0;
 byte error = 0;
+byte errorInh = 0;
 byte operTime = 0;
 byte dsTimer = 0;
 
@@ -175,6 +176,7 @@ uint32_t tmr = 0;
 uint32_t tmrNoIgnition = 0;
 uint32_t cntNoIgnition = 0;
 uint32_t InhibTimer = 0;
+uint32_t timerNoPos = 0;
 
 int timeDS = 0;
 
@@ -242,6 +244,7 @@ void setup()
   //
 
   error = 0; // при сбросе выставляем состояние без ошибок
+  errorInh = 0;  
   moving = 0;
 
 
@@ -274,6 +277,9 @@ void setup()
   if (digitalRead(inD) == LOW) {
     inhibitorD = 1;
   }
+
+
+
   //-----------------------------------------
 
 
@@ -304,14 +310,14 @@ void setup()
   // конец инициализации от борохова
 
   /* ПОДСВЕТКА
-  CANMessage messageLite;
-  messageLite.id = 0x202;
-  messageLite.len = 2;
-  messageLite.data[0] = 0xFD;
-  messageLite.data[1] = 0x00;
-  ok = can.tryToSend (messageLite);
-  delay(5);
-  ok = can.tryToSend (messageLite);
+    CANMessage messageLite;
+    messageLite.id = 0x202;
+    messageLite.len = 2;
+    messageLite.data[0] = 0xFD;
+    messageLite.data[1] = 0x00;
+    ok = can.tryToSend (messageLite);
+    delay(5);
+    ok = can.tryToSend (messageLite);
   */
   //КОНЕЦ ПОДСВЕТКИ, все равно не работает... хз может джойстик еще чего то ждет
 
@@ -701,7 +707,7 @@ void loop()
     if (millis() - Timer >= 50) {
       Timer = millis();
       timeDS = timeDS + 50;
-      if (timeDS >= 300) { // длительность импульса в ЭБУ на М+ М- здесь 300 мс, выставляется по месту
+      if (timeDS >= 1000) { // длительность импульса в ЭБУ на М+ М- здесь 1000 мс, выставляется по месту
         digitalWrite(DS_minus, LOW); // снимаем сигнал M-
         digitalWrite(DS_plus, LOW); // снимаем сигнал M+
         timeDS = 0; // обнуляем выдержку
@@ -731,7 +737,7 @@ void loop()
         moving2N = 0;
         moving2D = 0;
         moving2P = 0;
-        error = 1; // выставляем ошибку превышение времени работы моторчика, обнуляется рестартом платы ардуино
+        error = 1; // выставляем ошибку превышение времени работы моторчика, обнуляется рестартом платы ардуино или кнопкой P в паркинге
         operTime = 0;
       }
     }
@@ -781,11 +787,14 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerD = 0;
+      timerNoPos = 0;
       if (timerP > 10) {
         inhibitorP = 1; // через 10 мс выставляем P, время по месту регулируется
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 0;
+        timerP = 0;
+        errorInh = 0;
       }
     }
     if (digitalRead(inR) == LOW) {
@@ -793,11 +802,13 @@ void loop()
       timerP = 0;
       timerN = 0;
       timerD = 0;
+      timerNoPos = 0;
       if (timerR > 10) {
         inhibitorP = 0; // через 10 мс выставляем R
         inhibitorR = 1; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 0;
+        errorInh = 0;
         timerR = 0;
       }
     }
@@ -806,11 +817,13 @@ void loop()
       timerR = 0;
       timerP = 0;
       timerD = 0;
+      timerNoPos = 0;
       if (timerN > 10) {
         inhibitorP = 0; // через 10 мс выставляем N
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 1;
         inhibitorD = 0;
+        errorInh = 0;
         timerN = 0;
       }
     }
@@ -820,21 +833,39 @@ void loop()
       timerR = 0;
       timerN = 0;
       timerP = 0;
+      timerNoPos = 0;
       if (timerD > 10) {
         inhibitorP = 0; // через 10 мс выставляем D
         inhibitorR = 0; // остальные сбрасываем
         inhibitorN = 0;
         inhibitorD = 1;
+        errorInh = 0;
         timerD = 0;
+      }
+    }
+    if (digitalRead(inD) == HIGH && digitalRead(inN) == HIGH && digitalRead(inR) == HIGH && digitalRead(inP) == HIGH) // проверяем что ингибитор не присылает ничего
+    {
+      timerNoPos = timerNoPos + 1;
+      timerR = 0;
+      timerN = 0;
+      timerP = 0;
+      timerD = 0;
+      if (timerNoPos > 1000) {
+        inhibitorP = 0; // через 1000 мс выставляем ошибку
+        inhibitorR = 0; // остальные сбрасываем
+        inhibitorN = 0;// обнуляем положения, чтобы джойстик не светил
+        inhibitorD = 0;
+        timerNoPos = 0;
+        errorInh = 1;
       }
     }
   }
 
   // БЛОК ФИКСАЦИИ ОШИБКИ
   // сейчас по превышению времени работы моторчика, можно добавить по отсутствию сигналов от ингибитора
-  //
+  // сброс ошибки происходит в блоке приема сигналов от джойстика в режиме паркинг нажатие кнопки P
 
-  if (error)
+  if (error || errorInh)
   {
     digitalWrite(error_out, HIGH); // выдаем на выход
   }
